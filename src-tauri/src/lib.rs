@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod commands_m4;
 pub mod state;
 
 use state::AppState;
@@ -57,6 +58,22 @@ pub fn run() {
             commands::update_telemetry_subscription,
             commands::subscribe_telemetry,
             commands::get_extension_capabilities,
+            // Milestone 4: Depth Sidecars, .kfreak Bundles & Diagnostics Profiler
+            commands_m4::m4_list_depth_vendors,
+            commands_m4::m4_start_depth_sidecar,
+            commands_m4::m4_stop_depth_sidecar,
+            commands_m4::m4_restart_depth_sidecar,
+            commands_m4::m4_simulate_sidecar_crash,
+            commands_m4::m4_get_depth_sidecar_status,
+            commands_m4::m4_list_depth_sidecars,
+            commands_m4::m4_configure_depth_rois,
+            commands_m4::m4_set_depth_colormap,
+            commands_m4::m4_poll_depth_preview,
+            commands_m4::m4_export_kfreak_bundle,
+            commands_m4::m4_export_kfreak_file,
+            commands_m4::m4_import_kfreak_bundle,
+            commands_m4::m4_import_kfreak_file,
+            commands_m4::m4_get_diagnostics_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kontrolfreak Tauri application");

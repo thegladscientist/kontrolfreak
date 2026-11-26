@@ -14,6 +14,7 @@ pub struct AppState {
     pub router: Arc<SignalRouter>,
     pub telemetry: Arc<TelemetryAggregator>,
     pub protocols: Arc<ProtocolManager>,
+    pub m4: Arc<crate::commands_m4::M4RuntimeState>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
     pub subscribed_ports: Arc<Mutex<Option<HashSet<Uuid>>>>,
 }
@@ -34,12 +35,18 @@ impl AppState {
             Arc::clone(&router),
             Arc::clone(&telemetry),
         );
+        let m4 = Arc::new(crate::commands_m4::M4RuntimeState::new(
+            Arc::clone(&control),
+            Arc::clone(&router),
+            Arc::clone(&telemetry),
+        ));
 
         Self {
             control,
             router,
             telemetry,
             protocols,
+            m4,
             telemetry_pump: Mutex::new(None),
             subscribed_ports: Arc::new(Mutex::new(None)),
         }
