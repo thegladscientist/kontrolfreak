@@ -15,9 +15,10 @@ use midi::{
 };
 use osc::{decode_osc_bytes, encode_osc_message, osc_address_matches, osc_args_to_signal};
 use parking_lot::Mutex;
+use rtpmidi::{RtpMidiConfig, RtpMidiPeer, RtpMidiSession, RtpMidiSessionStatus, RtpMidiSessionTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::{TcpListener, UdpSocket};
@@ -66,7 +67,12 @@ enum OutboundSink {
         target: Option<SocketAddr>,
         format: UdpFormat,
     },
+    RtpMidi {
+        session: Arc<RtpMidiSession>,
+    },
 }
+
+pub type RoutedOutputListener = Arc<dyn Fn(&RoutedOutput) + Send + Sync>;
 
 struct RunningEndpoint {
     status: EndpointStatus,
@@ -74,14 +80,15 @@ struct RunningEndpoint {
     tasks: Vec<JoinHandle<()>>,
 }
 
-/// Orchestrates live protocol endpoints (OSC, MIDI, WebSockets, Raw UDP), forwarding inbound
-/// packets into `SignalRouter` and dispatching `RoutedOutput`s to outbound sinks.
+/// Orchestrates live protocol endpoints (OSC, MIDI, RTPMIDI, WebSockets, Raw UDP), forwarding
+/// inbound packets into `SignalRouter` and dispatching `RoutedOutput`s to outbound sinks.
 pub struct ProtocolManager {
     control: Arc<ControlPlane>,
     router: Arc<SignalRouter>,
     telemetry: Arc<TelemetryAggregator>,
     loopback_midi: Arc<LoopbackMidiBackend>,
     endpoints: Arc<Mutex<HashMap<Uuid, RunningEndpoint>>>,
+    output_listeners: Arc<Mutex<Vec<RoutedOutputListener>>>,
 }
 
 impl ProtocolManager {
@@ -96,7 +103,14 @@ impl ProtocolManager {
             telemetry,
             loopback_midi: LoopbackMidiBackend::new(),
             endpoints: Arc::new(Mutex::new(HashMap::new())),
+            output_listeners: Arc::new(Mutex::new(Vec::new())),
         })
+    }
+
+    /// Registers a listener notified for every `RoutedOutput` dispatched (used by M2 NDI
+    /// control-signal modulation and future extension modules).
+    pub fn add_output_listener(&self, listener: RoutedOutputListener) {
+        self.output_listeners.lock().push(listener);
     }
 
     pub fn loopback_midi(&self) -> Arc<LoopbackMidiBackend> {
@@ -123,6 +137,9 @@ impl ProtocolManager {
 
     pub fn stop_endpoint(&self, device_id: Uuid) {
         if let Some(ep) = self.endpoints.lock().remove(&device_id) {
+            if let OutboundSink::RtpMidi { session } = &ep.sink {
+                session.stop_tasks();
+            }
             for handle in ep.tasks {
                 handle.abort();
             }
@@ -135,15 +152,22 @@ impl ProtocolManager {
             guard.drain().map(|(_, v)| v).collect()
         };
         for ep in drained {
+            if let OutboundSink::RtpMidi { session } = &ep.sink {
+                session.stop_tasks();
+            }
             for h in ep.tasks {
                 h.abort();
             }
         }
     }
 
-    /// Dispatches a batch of `RoutedOutput`s to matching live outbound endpoints.
+    /// Dispatches a batch of `RoutedOutput`s to matching live outbound endpoints and listeners.
     pub async fn dispatch_outputs(self: &Arc<Self>, outputs: Vec<RoutedOutput>) {
+        let listeners: Vec<RoutedOutputListener> = self.output_listeners.lock().clone();
         for out in outputs {
+            for listener in &listeners {
+                listener(&out);
+            }
             self.dispatch_single(&out).await;
         }
     }
@@ -152,6 +176,7 @@ impl ProtocolManager {
         enum Action {
             OscSend(Arc<UdpSocket>, SocketAddr, Vec<u8>, String),
             MidiLoop(String, Vec<u8>),
+            RtpMidiSend(Arc<RtpMidiSession>, Vec<u8>, String),
             WsBroadcast(broadcast::Sender<Message>, Message, String),
             WsClientSend(mpsc::UnboundedSender<Message>, Message, String),
             UdpSend(Arc<UdpSocket>, SocketAddr, Vec<u8>, String),
@@ -220,6 +245,18 @@ impl ProtocolManager {
                         format!("{} -> {}", out.target_port_logical_key, out.value.summary_display()),
                     )
                 }
+                Some(OutboundSink::RtpMidi { session }) => {
+                    let msg = MidiMessage::from_logical_key_and_value(
+                        &out.target_port_logical_key,
+                        &out.value,
+                    );
+                    let bytes = msg.encode();
+                    let summary = format!(
+                        "{} {:02X?}",
+                        out.target_port_logical_key, bytes
+                    );
+                    Action::RtpMidiSend(Arc::clone(session), bytes, summary)
+                }
                 _ => Action::None,
             }
         };
@@ -241,6 +278,16 @@ impl ProtocolManager {
                     "MIDI",
                     "TX",
                     format!("{port_name} {:02X?}", bytes),
+                    Some(out.target_device_id),
+                    Some(out.target_port_id),
+                );
+            }
+            Action::RtpMidiSend(session, bytes, summary) => {
+                let _ = session.send_midi_payload(&bytes);
+                self.telemetry.record_log(
+                    "RTPMIDI",
+                    "TX",
+                    summary,
                     Some(out.target_device_id),
                     Some(out.target_port_id),
                 );
@@ -332,11 +379,149 @@ impl ProtocolManager {
                 )
                 .await
             }
+            DeviceKind::RtpMidiSession {
+                session_name,
+                control_port,
+                remote_host,
+                mdns_discover,
+            } => {
+                self.start_rtpmidi(
+                    device_id,
+                    RtpMidiConfig {
+                        session_name,
+                        control_port,
+                        remote_host,
+                        mdns_discover,
+                    },
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                )
+                .await
+            }
             other => Err(ProtocolError::Endpoint(format!(
-                "Endpoint kind {:?} does not run an M1 protocol transport",
+                "Endpoint kind {:?} does not run a network protocol transport",
                 other
             ))),
         }
+    }
+
+    pub fn rtpmidi_session(&self, device_id: Uuid) -> Option<Arc<RtpMidiSession>> {
+        let guard = self.endpoints.lock();
+        match guard.get(&device_id).map(|ep| &ep.sink) {
+            Some(OutboundSink::RtpMidi { session }) => Some(Arc::clone(session)),
+            _ => None,
+        }
+    }
+
+    pub fn rtpmidi_status(&self, device_id: Uuid) -> Option<RtpMidiSessionStatus> {
+        self.rtpmidi_session(device_id).map(|s| s.status())
+    }
+
+    pub fn rtpmidi_discovered_peers(&self, device_id: Uuid) -> Vec<RtpMidiPeer> {
+        self.rtpmidi_session(device_id)
+            .map(|s| s.discovered_peers())
+            .unwrap_or_default()
+    }
+
+    pub async fn start_rtpmidi_on(
+        self: &Arc<Self>,
+        device_id: Uuid,
+        bind_ip: IpAddr,
+    ) -> Result<EndpointStatus, ProtocolError> {
+        self.stop_endpoint(device_id);
+        let snap = self.control.snapshot();
+        let dev = snap
+            .devices
+            .into_iter()
+            .find(|d| d.id == device_id)
+            .ok_or(ProtocolError::DeviceNotFound(device_id))?;
+        match dev.kind {
+            DeviceKind::RtpMidiSession {
+                session_name,
+                control_port,
+                remote_host,
+                mdns_discover,
+            } => {
+                self.start_rtpmidi(
+                    device_id,
+                    RtpMidiConfig {
+                        session_name,
+                        control_port,
+                        remote_host,
+                        mdns_discover,
+                    },
+                    bind_ip,
+                )
+                .await
+            }
+            other => Err(ProtocolError::Endpoint(format!(
+                "Device {device_id} is {other:?}, not RtpMidiSession"
+            ))),
+        }
+    }
+
+    async fn start_rtpmidi(
+        self: &Arc<Self>,
+        device_id: Uuid,
+        config: RtpMidiConfig,
+        bind_ip: IpAddr,
+    ) -> Result<EndpointStatus, ProtocolError> {
+        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let session = RtpMidiSession::start(
+            config,
+            bind_ip,
+            Some(Arc::new(move |bytes, _ssrc| {
+                let _ = tx.send(bytes.to_vec());
+            })),
+        )
+        .await
+        .map_err(|e| ProtocolError::Endpoint(e.to_string()))?;
+
+        let mgr = Arc::clone(self);
+        let sname = session.config().session_name.clone();
+        let task = tokio::spawn(async move {
+            while let Some(bytes) = rx.recv().await {
+                if let Some(msg) = MidiMessage::decode(&bytes) {
+                    let (key, val) = msg.to_logical_key_and_value();
+                    mgr.telemetry.record_log(
+                        "RTPMIDI",
+                        "RX",
+                        format!("{sname} {key} = {}", val.summary_display()),
+                        Some(device_id),
+                        None,
+                    );
+                    if let Some(pid) =
+                        mgr.resolve_or_discover_port(device_id, &key, SignalKind::Midi, true)
+                    {
+                        let outputs = mgr
+                            .router
+                            .route(SignalEvent::new(pid, val, SignalEvent::now_ns()));
+                        if !outputs.is_empty() {
+                            mgr.dispatch_outputs(outputs).await;
+                        }
+                    }
+                }
+            }
+        });
+
+        let ctrl_addr = session.control_addr();
+        let data_port = session.data_addr().port();
+        let status = EndpointStatus {
+            device_id,
+            protocol: "RTPMIDI".into(),
+            running: true,
+            bound_address: Some(ctrl_addr.to_string()),
+            detail: format!("Control :{}/Data :{}", ctrl_addr.port(), data_port),
+        };
+
+        self.endpoints.lock().insert(
+            device_id,
+            RunningEndpoint {
+                status: status.clone(),
+                sink: OutboundSink::RtpMidi { session },
+                tasks: vec![task],
+            },
+        );
+        Ok(status)
     }
 
     async fn start_osc(
@@ -1043,6 +1228,129 @@ mod integration_tests {
         let body = std::str::from_utf8(&buf[..len]).unwrap();
         assert!(body.contains("0.65"), "unexpected UDP JSON output: {body}");
 
+        mgr.stop_all();
+    }
+
+    #[tokio::test]
+    async fn rtpmidi_bidirectional_routing_with_osc() {
+        let cp = Arc::new(ControlPlane::new(WorkspaceGraph::new("RTPMIDI<->OSC")).unwrap());
+        let telemetry = Arc::new(TelemetryAggregator::default());
+        let router = Arc::new(SignalRouter::new(cp.compiled_handle(), Arc::clone(&telemetry)));
+        let mgr = ProtocolManager::new(Arc::clone(&cp), Arc::clone(&router), Arc::clone(&telemetry));
+
+        // External UDP socket representing a downstream OSC app
+        let ext_osc_rx = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let ext_osc_addr = ext_osc_rx.local_addr().unwrap();
+
+        let rtp_cc_out = Port::new("cc.1.7", "RTP CC7 In", PortDirection::Out, SignalKind::Midi);
+        let rtp_cc_in = Port::new("cc.1.11", "RTP CC11 Out", PortDirection::In, SignalKind::Midi);
+        let osc_in = Port::new("/synth/vol", "OSC Vol Out", PortDirection::In, SignalKind::Control);
+        let osc_out = Port::new("/pad/expr", "OSC Expr In", PortDirection::Out, SignalKind::Control);
+
+        let rtp_cc_out_id = rtp_cc_out.id;
+        let rtp_cc_in_id = rtp_cc_in.id;
+        let osc_in_id = osc_in.id;
+        let osc_out_id = osc_out.id;
+
+        let rtp_dev = cp
+            .add_device(
+                Device::new(
+                    "rtpmidi.hub",
+                    "Kontrolfreak RTP Hub",
+                    DeviceKind::RtpMidiSession {
+                        session_name: "KF-Hub".into(),
+                        control_port: 0,
+                        remote_host: None,
+                        mdns_discover: false,
+                    },
+                )
+                .with_port(rtp_cc_out)
+                .with_port(rtp_cc_in),
+            )
+            .unwrap();
+
+        let osc_dev = cp
+            .add_device(
+                Device::new(
+                    "osc.bridge",
+                    "OSC Bridge",
+                    DeviceKind::OscEndpoint {
+                        bind_addr: "127.0.0.1:0".into(),
+                        target_addr: Some(ext_osc_addr.to_string()),
+                        auto_discover: false,
+                    },
+                )
+                .with_port(osc_in)
+                .with_port(osc_out),
+            )
+            .unwrap();
+
+        // Wire RTPMIDI -> OSC and OSC -> RTPMIDI
+        cp.add_wire(rtp_cc_out_id, osc_in_id).unwrap();
+        cp.add_wire(osc_out_id, rtp_cc_in_id).unwrap();
+
+        let _rtp_st = mgr
+            .start_rtpmidi_on(rtp_dev.id, IpAddr::V4(Ipv4Addr::LOCALHOST))
+            .await
+            .unwrap();
+        let osc_st = mgr.start_endpoint(osc_dev.id).await.unwrap();
+        let hub_ctrl_addr = mgr.rtpmidi_session(rtp_dev.id).unwrap().control_addr();
+        let osc_bind_addr: SocketAddr = osc_st.bound_address.unwrap().parse().unwrap();
+
+        // Remote RTPMIDI peer connects to the hub
+        let (peer_rx_tx, mut peer_rx_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let remote_peer = RtpMidiSession::start(
+            RtpMidiConfig {
+                session_name: "Remote-iPad".into(),
+                control_port: 0,
+                remote_host: Some(hub_ctrl_addr.to_string()),
+                mdns_discover: false,
+            },
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+            Some(Arc::new(move |bytes, _ssrc| {
+                let _ = peer_rx_tx.send(bytes.to_vec());
+            })),
+        )
+        .await
+        .unwrap();
+
+        // Wait for session handshake
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if remote_peer
+                .connected_peers()
+                .iter()
+                .any(|p| p.state == rtpmidi::PeerConnectionState::Connected)
+            {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < deadline, "RTPMIDI peer failed to connect");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        // Direction 1: Remote RTPMIDI peer sends CC 1.7 = 127 -> routed to OSC `/synth/vol` = 1.0
+        remote_peer.send_midi_payload(&[0xB0, 7, 127]).unwrap();
+        let mut buf = [0u8; 512];
+        let (len, _) = tokio::time::timeout(Duration::from_millis(500), ext_osc_rx.recv_from(&mut buf))
+            .await
+            .expect("timed out waiting for RTPMIDI->OSC")
+            .unwrap();
+        let msgs = decode_osc_bytes(&buf[..len]).unwrap();
+        assert_eq!(msgs[0].addr, "/synth/vol");
+        assert!((osc_args_to_signal(&msgs[0].args).as_f64().unwrap() - 1.0).abs() < 1e-4);
+
+        // Direction 2: External OSC sender sends `/pad/expr` = 0.5 -> routed to RTPMIDI CC 1.11 = 64
+        let osc_tx = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        osc::send_osc_udp(&osc_tx, osc_bind_addr, "/pad/expr", &SignalValue::Float(0.5))
+            .await
+            .unwrap();
+        let midi_back = tokio::time::timeout(Duration::from_millis(500), peer_rx_rx.recv())
+            .await
+            .expect("timed out waiting for OSC->RTPMIDI")
+            .unwrap();
+        assert_eq!(midi_back, vec![0xB0, 11, 64]);
+
+        remote_peer.shutdown().await;
         mgr.stop_all();
     }
 }

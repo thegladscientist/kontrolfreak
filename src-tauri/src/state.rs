@@ -3,6 +3,7 @@ use kf_core::{
     SignalKind, SignalRouter, TelemetryAggregator, WorkspaceGraph, WsFraming, WsMode,
 };
 use kf_protocols::ProtocolManager;
+use kf_video::VideoPipelineManager;
 use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ pub struct AppState {
     pub router: Arc<SignalRouter>,
     pub telemetry: Arc<TelemetryAggregator>,
     pub protocols: Arc<ProtocolManager>,
+    pub video: Arc<VideoPipelineManager>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
     pub subscribed_ports: Arc<Mutex<Option<HashSet<Uuid>>>>,
 }
@@ -34,12 +36,18 @@ impl AppState {
             Arc::clone(&router),
             Arc::clone(&telemetry),
         );
+        let video = VideoPipelineManager::new_arc();
+        let video_listener = Arc::clone(&video);
+        protocols.add_output_listener(Arc::new(move |out| {
+            video_listener.apply_routed_output(out);
+        }));
 
         Self {
             control,
             router,
             telemetry,
             protocols,
+            video,
             telemetry_pump: Mutex::new(None),
             subscribed_ports: Arc::new(Mutex::new(None)),
         }
