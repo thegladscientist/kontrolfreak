@@ -2,6 +2,7 @@ use kf_core::{
     ControlPlane, Device, DeviceFingerprint, DeviceKind, MidiBackendKind, Port, PortDirection,
     SignalKind, SignalRouter, TelemetryAggregator, WorkspaceGraph, WsFraming, WsMode,
 };
+use kf_hardware::HardwareManager;
 use kf_protocols::ProtocolManager;
 use kf_video::VideoPipelineManager;
 use parking_lot::Mutex;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub telemetry: Arc<TelemetryAggregator>,
     pub protocols: Arc<ProtocolManager>,
     pub video: Arc<VideoPipelineManager>,
+    pub hardware: Arc<HardwareManager>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
     pub subscribed_ports: Arc<Mutex<Option<HashSet<Uuid>>>>,
 }
@@ -41,6 +43,10 @@ impl AppState {
         protocols.add_output_listener(Arc::new(move |out| {
             video_listener.apply_routed_output(out);
         }));
+        let hardware = Arc::new(HardwareManager::new(
+            Arc::clone(&control),
+            Arc::clone(&router),
+        ));
 
         Self {
             control,
@@ -48,6 +54,7 @@ impl AppState {
             telemetry,
             protocols,
             video,
+            hardware,
             telemetry_pump: Mutex::new(None),
             subscribed_ports: Arc::new(Mutex::new(None)),
         }

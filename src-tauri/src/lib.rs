@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod commands_m2;
+pub mod commands_m3;
 pub mod state;
 
 use state::AppState;
@@ -71,6 +72,29 @@ pub fn run() {
             commands_m2::m2_connect_rtpmidi_peer,
             commands_m2::m2_sync_rtpmidi_clock,
             commands_m2::m2_send_rtpmidi_test_midi,
+            // M3: Hardware HID Hot-Plug, Learn Wizard & RGB Camera CV
+            commands_m3::m3_list_hid_devices,
+            commands_m3::m3_check_hid_permissions,
+            commands_m3::m3_poll_hid_hotplug,
+            commands_m3::m3_simulate_hid_plug,
+            commands_m3::m3_simulate_hid_unplug,
+            commands_m3::m3_simulate_hid_actuate,
+            commands_m3::m3_parse_hid_descriptor,
+            commands_m3::m3_learn_start_baseline,
+            commands_m3::m3_learn_poll_samples,
+            commands_m3::m3_learn_start_capture,
+            commands_m3::m3_learn_classify,
+            commands_m3::m3_learn_commit_control,
+            commands_m3::m3_learn_get_snapshot,
+            commands_m3::m3_learn_reset,
+            commands_m3::m3_save_and_attach_learned_device,
+            commands_m3::m3_export_hid_device_preset,
+            commands_m3::m3_import_hid_device_preset,
+            commands_m3::m3_list_device_presets,
+            commands_m3::m3_list_rgb_cameras,
+            commands_m3::m3_update_rgb_cv_config,
+            commands_m3::m3_get_rgb_cv_config,
+            commands_m3::m3_step_rgb_camera_cv,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kontrolfreak Tauri application");

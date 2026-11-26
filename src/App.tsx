@@ -11,6 +11,7 @@ import { registerM2VideoRtpMidiPlugin } from './plugins/m2VideoRtpMidi';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { bridge } from './lib/bridge';
 import { telemetryStore } from './lib/telemetryStore';
+import { registerM3HardwareLearnPlugin } from './plugins/m3HardwareLearn';
 
 let registriesBooted = false;
 export function bootBuiltinRegistries(): void {
@@ -21,6 +22,7 @@ export function bootBuiltinRegistries(): void {
   registerBuiltinDrawerTabs();
   registerBuiltinCommandActions();
   registerM2VideoRtpMidiPlugin();
+  registerM3HardwareLearnPlugin();
 }
 
 bootBuiltinRegistries();

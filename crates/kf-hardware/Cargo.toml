@@ -4,8 +4,19 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+native-hid = ["dep:hidapi"]
+native-camera = ["dep:nokhwa"]
+
 [dependencies]
 kf-core = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
+
+hidapi = { version = "2", optional = true }
+nokhwa = { version = "0.10", optional = true }
