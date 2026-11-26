@@ -8,10 +8,11 @@ import { CommandPalette, registerBuiltinCommandActions } from './components/Comm
 import { ToastHost } from './components/ToastHost';
 import { initBuiltinNodeRegistry } from './registries';
 import { registerM2VideoRtpMidiPlugin } from './plugins/m2VideoRtpMidi';
+import { registerM3HardwareLearnPlugin } from './plugins/m3HardwareLearn';
+import { registerM4DepthSidecarPlugin } from './plugins/m4DepthSidecar';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { bridge } from './lib/bridge';
 import { telemetryStore } from './lib/telemetryStore';
-import { registerM3HardwareLearnPlugin } from './plugins/m3HardwareLearn';
 
 let registriesBooted = false;
 export function bootBuiltinRegistries(): void {
@@ -23,6 +24,7 @@ export function bootBuiltinRegistries(): void {
   registerBuiltinCommandActions();
   registerM2VideoRtpMidiPlugin();
   registerM3HardwareLearnPlugin();
+  registerM4DepthSidecarPlugin();
 }
 
 bootBuiltinRegistries();

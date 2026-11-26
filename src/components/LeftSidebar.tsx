@@ -7,6 +7,7 @@ import {
   Layers,
   Link2,
   Plus,
+  Radar,
   RefreshCw,
   Search,
   Unplug,
@@ -430,6 +431,8 @@ export const LeftSidebar: React.FC = () => {
         return <Cpu className="w-3.5 h-3.5" />;
       case 'folder':
         return <FolderOpen className="w-3.5 h-3.5" />;
+      case 'radar':
+        return <Radar className="w-3.5 h-3.5" />;
       default:
         return <Layers className="w-3.5 h-3.5" />;
     }

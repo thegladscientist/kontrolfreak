@@ -6,6 +6,7 @@ members = [
     "crates/kf-video",
     "crates/kf-hardware",
     "crates/kf-sidecar-ipc",
+    "crates/kf-sensor-depth",
     "src-tauri",
 ]
 
@@ -34,3 +35,4 @@ kf-protocols = { path = "crates/kf-protocols" }
 kf-video = { path = "crates/kf-video" }
 kf-hardware = { path = "crates/kf-hardware" }
 kf-sidecar-ipc = { path = "crates/kf-sidecar-ipc" }
+kf-sensor-depth = { path = "crates/kf-sensor-depth" }

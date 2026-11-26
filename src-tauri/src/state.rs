@@ -18,6 +18,7 @@ pub struct AppState {
     pub protocols: Arc<ProtocolManager>,
     pub video: Arc<VideoPipelineManager>,
     pub hardware: Arc<HardwareManager>,
+    pub m4: Arc<crate::commands_m4::M4RuntimeState>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
     pub subscribed_ports: Arc<Mutex<Option<HashSet<Uuid>>>>,
 }
@@ -47,6 +48,11 @@ impl AppState {
             Arc::clone(&control),
             Arc::clone(&router),
         ));
+        let m4 = Arc::new(crate::commands_m4::M4RuntimeState::new(
+            Arc::clone(&control),
+            Arc::clone(&router),
+            Arc::clone(&telemetry),
+        ));
 
         Self {
             control,
@@ -55,6 +61,7 @@ impl AppState {
             protocols,
             video,
             hardware,
+            m4,
             telemetry_pump: Mutex::new(None),
             subscribed_ports: Arc::new(Mutex::new(None)),
         }
