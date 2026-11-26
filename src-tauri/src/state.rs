@@ -2,6 +2,7 @@ use kf_core::{
     ControlPlane, Device, DeviceFingerprint, DeviceKind, MidiBackendKind, Port, PortDirection,
     SignalKind, SignalRouter, TelemetryAggregator, WorkspaceGraph, WsFraming, WsMode,
 };
+use kf_hardware::HardwareManager;
 use kf_protocols::ProtocolManager;
 use parking_lot::Mutex;
 use std::collections::HashSet;
@@ -14,6 +15,7 @@ pub struct AppState {
     pub router: Arc<SignalRouter>,
     pub telemetry: Arc<TelemetryAggregator>,
     pub protocols: Arc<ProtocolManager>,
+    pub hardware: Arc<HardwareManager>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
     pub subscribed_ports: Arc<Mutex<Option<HashSet<Uuid>>>>,
 }
@@ -34,12 +36,17 @@ impl AppState {
             Arc::clone(&router),
             Arc::clone(&telemetry),
         );
+        let hardware = Arc::new(HardwareManager::new(
+            Arc::clone(&control),
+            Arc::clone(&router),
+        ));
 
         Self {
             control,
             router,
             telemetry,
             protocols,
+            hardware,
             telemetry_pump: Mutex::new(None),
             subscribed_ports: Arc::new(Mutex::new(None)),
         }

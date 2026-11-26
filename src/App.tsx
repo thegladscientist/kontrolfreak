@@ -10,6 +10,7 @@ import { initBuiltinNodeRegistry } from './registries';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { bridge } from './lib/bridge';
 import { telemetryStore } from './lib/telemetryStore';
+import { registerM3HardwareLearnPlugin } from './plugins/m3HardwareLearn';
 
 let registriesBooted = false;
 export function bootBuiltinRegistries(): void {
@@ -19,6 +20,7 @@ export function bootBuiltinRegistries(): void {
   registerBuiltinSidebarSections();
   registerBuiltinDrawerTabs();
   registerBuiltinCommandActions();
+  registerM3HardwareLearnPlugin();
 }
 
 bootBuiltinRegistries();
