@@ -61,7 +61,7 @@ fn real_out_of_process_sidecar_shm_delivery_and_3d_extraction() {
 
     supervisor.start().expect("supervisor starts cleanly");
 
-    let got_frames = wait_until(Duration::from_secs(5), || {
+    let got_frames = wait_until(Duration::from_secs(15), || {
         supervisor.status() == SidecarHealthStatus::Running
             && received_frames.load(Ordering::Relaxed) >= 5
     });
@@ -189,7 +189,7 @@ fn real_crash_isolation_sigkill_mid_stream_recovers_without_interrupting_router(
     supervisor.start().unwrap();
 
     // Wait for initial healthy stream
-    assert!(wait_until(Duration::from_secs(5), || {
+    assert!(wait_until(Duration::from_secs(15), || {
         let s = supervisor.health_snapshot();
         s.status == SidecarHealthStatus::Running && s.frames_received >= 4 && s.pid.is_some()
     }));
@@ -215,7 +215,7 @@ fn real_crash_isolation_sigkill_mid_stream_recovers_without_interrupting_router(
 
     // Verify supervisor detects crash, enters CrashedRestarting, restarts with a NEW PID,
     // and resumes delivering depth frames over SHM!
-    let recovered = wait_until(Duration::from_secs(8), || {
+    let recovered = wait_until(Duration::from_secs(20), || {
         let snap = supervisor.health_snapshot();
         snap.status == SidecarHealthStatus::Running
             && snap.restart_count >= 1

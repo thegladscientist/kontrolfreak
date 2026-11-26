@@ -165,8 +165,19 @@ impl RtpMidiSession {
         let ctrl_task = tokio::spawn(async move {
             let mut buf = vec![0u8; 4096];
             loop {
-                let Ok((len, src)) = inner_ctrl.control_socket.recv_from(&mut buf).await else {
-                    break;
+                let (len, src) = match inner_ctrl.control_socket.recv_from(&mut buf).await {
+                    Ok(pair) => pair,
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::ConnectionReset
+                                | std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::Interrupted
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(_) => break,
                 };
                 if let Some(pkt) = AppleMidiPacket::decode(&buf[..len]) {
                     handle_control_packet(&inner_ctrl, pkt, src).await;
@@ -179,8 +190,19 @@ impl RtpMidiSession {
         let data_task = tokio::spawn(async move {
             let mut buf = vec![0u8; 8192];
             loop {
-                let Ok((len, src)) = inner_data.data_socket.recv_from(&mut buf).await else {
-                    break;
+                let (len, src) = match inner_data.data_socket.recv_from(&mut buf).await {
+                    Ok(pair) => pair,
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::ConnectionReset
+                                | std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::Interrupted
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(_) => break,
                 };
                 if AppleMidiPacket::is_apple_midi(&buf[..len]) {
                     if let Some(pkt) = AppleMidiPacket::decode(&buf[..len]) {

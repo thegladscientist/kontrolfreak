@@ -100,7 +100,8 @@ struct SharedState {
     stop_flag: AtomicBool,
 }
 
-/// Locates the `kf-sensor-depth` executable alongside the current binary or workspace target dir.
+/// Locates the `kf-sensor-depth` executable alongside the current binary, inside a Tauri
+/// bundle (`externalBin` / macOS `Contents/MacOS` / `Contents/Resources`), or workspace target dir.
 pub fn locate_depth_sidecar_binary() -> Option<PathBuf> {
     if let Ok(explicit) = std::env::var("KF_SENSOR_DEPTH_BIN") {
         let p = PathBuf::from(explicit);
@@ -117,9 +118,16 @@ pub fn locate_depth_sidecar_binary() -> Option<PathBuf> {
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
+            // Bundled Tauri externalBin (Windows install dir, macOS Contents/MacOS/, Linux /usr/bin)
+            // and `cargo build --workspace` output directory.
             let sibling = dir.join(bin_name);
             if sibling.exists() {
                 return Some(sibling);
+            }
+            // macOS bundle Resources fallback (`Contents/MacOS/../Resources/kf-sensor-depth`)
+            let mac_resources = dir.join("../Resources").join(bin_name);
+            if mac_resources.exists() {
+                return Some(mac_resources);
             }
             // In cargo test, current_exe is in target/debug/deps/<test-bin>
             if let Some(parent) = dir.parent() {
@@ -134,10 +142,28 @@ pub fn locate_depth_sidecar_binary() -> Option<PathBuf> {
     let cwd_candidates = [
         PathBuf::from("target/debug").join(bin_name),
         PathBuf::from("target/release").join(bin_name),
+        PathBuf::from("../target/debug").join(bin_name),
+        PathBuf::from("../target/release").join(bin_name),
     ];
     for c in cwd_candidates {
         if c.exists() {
             return Some(c);
+        }
+    }
+
+    // Check Tauri externalBin staging directory (`src-tauri/binaries/kf-sensor-depth-*`)
+    for dir in [Path::new("src-tauri/binaries"), Path::new("binaries")] {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    let matches = name.starts_with("kf-sensor-depth")
+                        && (!cfg!(windows) || name.ends_with(".exe"));
+                    if matches && path.is_file() {
+                        return Some(path);
+                    }
+                }
+            }
         }
     }
     None
@@ -443,16 +469,37 @@ fn interruptible_sleep(stop_flag: &AtomicBool, total: Duration) {
     }
 }
 
+fn attempt_endpoints(base_ipc: &str, base_shm: &Path, attempt: u64) -> (String, PathBuf) {
+    if attempt == 0 {
+        return (base_ipc.to_string(), base_shm.to_path_buf());
+    }
+    let ipc = if cfg!(windows) {
+        format!("{base_ipc}-r{attempt}")
+    } else if let Some(stripped) = base_ipc.strip_suffix(".sock") {
+        format!("{stripped}-r{attempt}.sock")
+    } else {
+        format!("{base_ipc}-r{attempt}")
+    };
+    let shm = match (base_shm.parent(), base_shm.file_stem()) {
+        (Some(parent), Some(stem)) => {
+            parent.join(format!("{}-r{attempt}.shm", stem.to_string_lossy()))
+        }
+        _ => base_shm.with_extension(format!("r{attempt}.shm")),
+    };
+    (ipc, shm)
+}
+
 fn supervisor_loop(
     config: SupervisorConfig,
-    ipc_endpoint: String,
-    shm_path: PathBuf,
+    base_ipc_endpoint: String,
+    base_shm_path: PathBuf,
     shared: Arc<SharedState>,
     profiler: Option<Arc<DiagnosticsProfiler>>,
     on_frame: Option<FrameCallback>,
     on_status: Option<StatusCallback>,
 ) {
     let mut is_first_launch = true;
+    let mut attempt: u64 = 0;
 
     while !shared.stop_flag.load(Ordering::Acquire) {
         if !is_first_launch {
@@ -474,6 +521,10 @@ fn supervisor_loop(
             }
         }
         is_first_launch = false;
+
+        let (ipc_endpoint, shm_path) =
+            attempt_endpoints(&base_ipc_endpoint, &base_shm_path, attempt);
+        attempt = attempt.wrapping_add(1);
 
         set_status(
             &shared,
@@ -507,8 +558,8 @@ fn supervisor_loop(
         }
 
         // Launch out-of-process depth camera sidecar
-        let child = match Command::new(&config.binary_path)
-            .arg("--ipc")
+        let mut cmd = Command::new(&config.binary_path);
+        cmd.arg("--ipc")
             .arg(&ipc_endpoint)
             .arg("--shm")
             .arg(&shm_path)
@@ -524,9 +575,14 @@ fn supervisor_loop(
             .arg(config.sidecar_id.to_string())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
+            .stderr(Stdio::null());
+        #[cfg(windows)]
         {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
                 let msg = format!("spawn failed: {e}");
@@ -726,7 +782,12 @@ fn supervisor_loop(
             std::thread::sleep(poll_interval);
         };
 
+        // Drop host SHM mapping and IPC pipe handles before reaping & cleaning up files (important on Windows).
+        drop(reader);
+        drop(client);
         reap_child(&shared);
+        cleanup_socket_endpoint(&ipc_endpoint);
+        let _ = std::fs::remove_file(&shm_path);
         shared.pid.store(0, Ordering::Release);
         *shared.fps.lock() = 0.0;
 

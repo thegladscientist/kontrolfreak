@@ -11,7 +11,24 @@ Modular, low-latency desktop studio for routing control signals, hardware periph
 
 ---
 
-## Quick Start (Windows & macOS)
+## Prebuilt Desktop Installers (Windows & macOS)
+
+You can download ready-to-install desktop builds (with the bundled `kf-sensor-depth` sidecar) straight from GitHub — no local Rust/C++ toolchain required:
+
+- **One-click build via GitHub Actions:** Open the **Actions** tab → select **Build & Release Desktop Installers** → click **Run workflow** (optionally check *Also create/update a draft GitHub Release*). When the run finishes, download the artifact for your platform:
+  - `kontrolfreak-windows-x64` — Windows `.msi` and NSIS `-setup.exe` installers
+  - `kontrolfreak-macos-apple-silicon` — macOS Apple Silicon (`.dmg`, M1/M2/M3/M4)
+  - `kontrolfreak-macos-intel` — macOS Intel (`.dmg`, x86_64)
+- **Tagged GitHub Releases:** Pushing a version tag (for example `git tag v0.1.0 && git push origin v0.1.0`) automatically builds all Windows and macOS installers, computes `SHA256SUMS.txt`, and publishes a draft release under **Releases**.
+
+### Unsigned Build Notice (macOS Gatekeeper & Windows SmartScreen)
+Default workflow builds are unsigned unless optional Apple Developer ID / Windows signing secrets are configured in repository settings:
+- **macOS:** On first launch, right-click **Kontrolfreak.app** → **Open** → **Open** (or run `xattr -cr /Applications/Kontrolfreak.app` if Gatekeeper reports the app is damaged/unverified).
+- **Windows:** If SmartScreen displays *"Windows protected your PC"*, click **More info** → **Run anyway**.
+
+---
+
+## Quick Start (Build from Source — Windows & macOS)
 
 ### Prerequisites
 - **Node.js 20+** and `npm`
@@ -19,7 +36,7 @@ Modular, low-latency desktop studio for routing control signals, hardware periph
 - **Platform build tools (for the native Tauri desktop app):**
   - **Windows:** [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and WebView2 Runtime (pre-installed on Windows 10/11).
   - **macOS:** Xcode Command Line Tools (`xcode-select --install`).
-  - **Linux:** `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libasound2-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`, `libssl-dev`, `pkg-config`.
+  - **Linux:** `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libasound2-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`, `libssl-dev`, `libudev-dev`, `pkg-config`.
 
 ### 1. Install dependencies
 ```bash
@@ -31,12 +48,17 @@ npm install
 npm run tauri dev
 ```
 
+To build a local release installer with the `kf-sensor-depth` sidecar bundled:
+```bash
+npm run tauri:build
+```
+
 ### 3. Or preview in a standalone browser (loopback mock mode)
 No Rust build or hardware required — includes synthetic NDI Test Patterns, mock RTPMIDI peers, simulated HID Learn devices, synthetic RGB camera CV, and synthetic Depth sensors:
 ```bash
 npm run dev
 ```
-Then open `http://localhost:1420` in your browser.
+Then open `http://localhost:5173` in your browser.
 
 ---
 
