@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (TypeScript, Vitest, Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Run Vitest unit tests
+        run: npm test
+
+      - name: Build production frontend bundle
+        run: npm run build
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri, ALSA, and HID dev dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libasound2-dev \
+            librsvg2-dev \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            libudev-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Ensure frontendDist directory exists for Tauri compile-time check
+        shell: bash
+        run: |
+          mkdir -p dist
+          test -f dist/index.html || printf '<!doctype html><html><body></body></html>\n' > dist/index.html
+
+      - name: Strict zero-warning workspace check
+        shell: bash
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --workspace
+
+      - name: Run full Rust workspace tests
+        shell: bash
+        run: cargo test --workspace
+
+      - name: Check native-hid feature (hidapi)
+        shell: bash
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check -p kf-hardware --features native-hid
+
+      - name: Test optional GPU video scaler feature (wgpu + CPU fallback)
+        shell: bash
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test -p kf-video --features gpu

@@ -1,0 +1,156 @@
+name: Build & Release Desktop Installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional release version label (defaults to version in src-tauri/tauri.conf.json)'
+        required: false
+        default: ''
+        type: string
+      draft_release:
+        description: 'Also create/update a draft GitHub Release (artifacts are always uploaded)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Installer (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64 (.msi + .exe)
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: msi,nsis
+            artifact_name: kontrolfreak-windows-x64
+          - label: macOS Apple Silicon (.dmg)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: dmg
+            artifact_name: kontrolfreak-macos-apple-silicon
+          - label: macOS Intel (.dmg)
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bundles: dmg
+            artifact_name: kontrolfreak-macos-intel
+
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: release-${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and stage kf-sensor-depth sidecar binary
+        run: node scripts/stage-sidecar.mjs --release --target ${{ matrix.target }}
+
+      - name: Build Kontrolfreak Tauri installers
+        shell: bash
+        env:
+          # Unsigned builds by default. Adding these repository secrets later automatically
+          # enables Apple Developer ID signing/notarization or Tauri updater signing.
+          _APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          _APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          _APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          _APPLE_ID: ${{ secrets.APPLE_ID }}
+          _APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          _APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          _TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          _TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            val_name="_${var}"
+            if [[ -n "${!val_name:-}" ]]; then
+              export "${var}=${!val_name}"
+            fi
+          done
+          npx tauri build \
+            --target "${{ matrix.target }}" \
+            --config src-tauri/tauri.sidecar.conf.json \
+            --bundles "${{ matrix.bundles }}"
+
+      - name: Collect built installers
+        shell: bash
+        run: |
+          mkdir -p artifacts-out
+          BUNDLE_DIR="target/${{ matrix.target }}/release/bundle"
+          find "$BUNDLE_DIR" -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.dmg' \) -exec cp -v {} artifacts-out/ \;
+          ls -lh artifacts-out/
+
+      - name: Upload downloadable installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts-out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    name: Publish Draft GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.draft_release == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Determine release tag
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            RAW="${{ inputs.version }}"
+            TAG="v${RAW#v}"
+          else
+            VER="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+            TAG="v${VER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Kontrolfreak ${{ steps.meta.outputs.tag }}
+          draft: true
+          generate_release_notes: true
+          files: release-assets/*

@@ -26,10 +26,26 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Modular low-latency studio router for control signals, hardware, NDI video, and depth sensors.",
+    "longDescription": "Kontrolfreak is a modular, low-latency desktop studio for routing OSC, MIDI, RTPMIDI, WebSockets, UDP, HID hardware, RGB camera CV, NDI video streams, and crash-isolated depth sensors.",
     "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

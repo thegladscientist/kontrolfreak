@@ -29,7 +29,8 @@ pub fn to_socket_name(endpoint: &str) -> Result<Name<'static>, SidecarError> {
         let clean = endpoint
             .rsplit(['\\', '/'])
             .next()
-            .unwrap_or(endpoint)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("kontrolfreak-ipc")
             .to_string();
         clean
             .to_ns_name::<GenericNamespaced>()
