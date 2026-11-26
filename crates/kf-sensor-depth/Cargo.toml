@@ -1,0 +1,30 @@
+[package]
+name = "kf-sensor-depth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# Vendor SDK integration feature gates (hardware adapters load dynamically or bind native SDKs when enabled)
+realsense = []
+orbbec = []
+kinect = []
+
+[lib]
+name = "kf_sensor_depth"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kf-sensor-depth"
+path = "src/main.rs"
+
+[dependencies]
+kf-core = { workspace = true }
+kf-sidecar-ipc = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }

@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #0b0e14;
+    color: #e6edf7;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+/* React Flow dark studio overrides */
+.react-flow__background {
+  background-color: #0b0e14;
+}
+
+.react-flow__controls {
+  background: #161c2c;
+  border: 1px solid #263047;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.react-flow__controls-button {
+  background: #161c2c !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid #263047 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #1d2538 !important;
+  color: #f8fafc !important;
+}
+
+.react-flow__minimap {
+  background: #111622 !important;
+  border: 1px solid #263047 !important;
+  border-radius: 8px;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* Subtle wire pulse when active (disabled in calm mode) */
+@keyframes kf-dash-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.kf-edge-flowing {
+  stroke-dasharray: 6 6;
+  animation: kf-dash-flow 0.75s linear infinite;
+}
+
+/* Custom thin dark scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0e14;
+}
+::-webkit-scrollbar-thumb {
+  background: #263047;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4b6e;
+}

@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/kf-core",
+    "crates/kf-protocols",
+    "crates/kf-video",
+    "crates/kf-hardware",
+    "crates/kf-sidecar-ipc",
+    "crates/kf-sensor-depth",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+arc-swap = "1.7"
+futures-util = "0.3"
+midir = "0.10"
+parking_lot = "0.12"
+rosc = "0.10"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+tokio-tungstenite = "0.24"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+kf-core = { path = "crates/kf-core" }
+kf-protocols = { path = "crates/kf-protocols" }
+kf-video = { path = "crates/kf-video" }
+kf-hardware = { path = "crates/kf-hardware" }
+kf-sidecar-ipc = { path = "crates/kf-sidecar-ipc" }
+kf-sensor-depth = { path = "crates/kf-sensor-depth" }
