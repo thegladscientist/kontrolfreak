@@ -472,7 +472,7 @@ export function registerM3HardwareLearnPlugin(): void {
   registerSidebarSection({
     id: 'm3-hardware',
     label: 'HID',
-    order: 25,
+    order: 24,
     iconName: 'cpu',
     component: M3HardwareSidebarSection,
   });

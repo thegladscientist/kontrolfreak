@@ -666,7 +666,7 @@ export function registerM4DepthSidecarPlugin(): void {
   registerSidebarSection({
     id: M4_SIDEBAR_ID,
     label: 'Depth',
-    order: 25,
+    order: 26,
     iconName: 'radar',
     component: DepthSidebarSection,
   });

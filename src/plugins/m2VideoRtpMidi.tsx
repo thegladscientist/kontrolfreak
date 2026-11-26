@@ -177,7 +177,7 @@ export function registerM2VideoRtpMidiPlugin(): void {
   registerSidebarSection({
     id: 'm2-media-net',
     label: 'NDI/RTP',
-    order: 25,
+    order: 22,
     iconName: 'video',
     component: M2SidebarSection,
   });

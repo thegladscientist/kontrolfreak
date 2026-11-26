@@ -12,6 +12,7 @@ import {
   Search,
   Unplug,
   Upload,
+  Video,
 } from 'lucide-react';
 import {
   listNodeDefinitions,
@@ -42,8 +43,12 @@ const DevicePaletteSection: React.FC = () => {
   const handleQuickAdd = (kindType: DeviceKind['type']) => {
     const def = defs.find((d) => d.kindType === kindType);
     if (!def) return;
-    const offset = Math.round(Math.random() * 140);
-    void addDevice(def.createDevice({ x: 180 + offset, y: 120 + offset }));
+    const existing = useWorkspaceStore.getState().graph.devices;
+    const addedIndex = Math.max(0, existing.length - 4);
+    const col = addedIndex % 3;
+    const row = Math.floor(addedIndex / 3);
+    const baseY = existing.length >= 4 ? 500 : 120;
+    void addDevice(def.createDevice({ x: 80 + col * 360, y: baseY + row * 430 }));
   };
 
   return (
@@ -433,6 +438,8 @@ export const LeftSidebar: React.FC = () => {
         return <FolderOpen className="w-3.5 h-3.5" />;
       case 'radar':
         return <Radar className="w-3.5 h-3.5" />;
+      case 'video':
+        return <Video className="w-3.5 h-3.5" />;
       default:
         return <Layers className="w-3.5 h-3.5" />;
     }
@@ -440,19 +447,19 @@ export const LeftSidebar: React.FC = () => {
 
   return (
     <aside className="w-64 shrink-0 bg-studio-surface border-r border-studio-border flex flex-col min-h-0">
-      <div className="flex border-b border-studio-border p-1 gap-1 bg-studio-bg/50">
+      <div className="grid grid-cols-3 border-b border-studio-border p-1 gap-1 bg-studio-bg/50">
         {sections.map((sec) => (
           <button
             key={sec.id}
             onClick={() => setActive(sec.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${
               sec.id === activeSection?.id
                 ? 'bg-studio-elevated text-amber-300 border border-studio-border'
                 : 'text-studio-muted hover:text-slate-200 hover:bg-studio-panel'
             }`}
           >
             {renderIcon(sec.iconName)}
-            <span>{sec.label}</span>
+            <span className="truncate">{sec.label}</span>
           </button>
         ))}
       </div>
