@@ -1,0 +1,18 @@
+[package]
+name = "kf-protocols"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+futures-util = { workspace = true }
+kf-core = { workspace = true }
+midir = { workspace = true }
+parking_lot = { workspace = true }
+rosc = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+uuid = { workspace = true }

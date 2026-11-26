@@ -1,0 +1,22 @@
+# Build outputs
+/target
+/dist
+/src-tauri/target
+/src-tauri/gen/schemas
+
+# Node
+/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+.env
+.env.local

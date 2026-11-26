@@ -1,0 +1,27 @@
+[package]
+name = "kontrolfreak-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "kontrolfreak_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+kf-core = { workspace = true }
+kf-protocols = { workspace = true }
+kf-video = { workspace = true }
+kf-hardware = { workspace = true }
+kf-sidecar-ipc = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tauri = { version = "2", features = [] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
