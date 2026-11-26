@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod commands_m2;
 pub mod state;
 
 use state::AppState;
@@ -57,6 +58,19 @@ pub fn run() {
             commands::update_telemetry_subscription,
             commands::subscribe_telemetry,
             commands::get_extension_capabilities,
+            // Milestone 2: RTPMIDI & NDI Video Pipeline
+            commands_m2::m2_get_ndi_runtime_status,
+            commands_m2::m2_discover_ndi_sources,
+            commands_m2::m2_get_ndi_node_state,
+            commands_m2::m2_configure_ndi_node,
+            commands_m2::m2_get_ndi_preview_frame,
+            commands_m2::m2_start_rtpmidi_session,
+            commands_m2::m2_stop_rtpmidi_session,
+            commands_m2::m2_get_rtpmidi_status,
+            commands_m2::m2_discover_rtpmidi_peers,
+            commands_m2::m2_connect_rtpmidi_peer,
+            commands_m2::m2_sync_rtpmidi_clock,
+            commands_m2::m2_send_rtpmidi_test_midi,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kontrolfreak Tauri application");

@@ -7,6 +7,7 @@ import { BottomDrawer, registerBuiltinDrawerTabs } from './components/BottomDraw
 import { CommandPalette, registerBuiltinCommandActions } from './components/CommandPalette';
 import { ToastHost } from './components/ToastHost';
 import { initBuiltinNodeRegistry } from './registries';
+import { registerM2VideoRtpMidiPlugin } from './plugins/m2VideoRtpMidi';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { bridge } from './lib/bridge';
 import { telemetryStore } from './lib/telemetryStore';
@@ -19,6 +20,7 @@ export function bootBuiltinRegistries(): void {
   registerBuiltinSidebarSections();
   registerBuiltinDrawerTabs();
   registerBuiltinCommandActions();
+  registerM2VideoRtpMidiPlugin();
 }
 
 bootBuiltinRegistries();
