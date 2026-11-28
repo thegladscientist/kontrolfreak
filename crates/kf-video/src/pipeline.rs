@@ -5,8 +5,8 @@
 //! - Live `kf-core` control-signal modulation bridge (OSC/MIDI/WS/UDP/Macros -> NDI params)
 //! - Thread-safe `VideoPipelineManager` for Tauri commands & UI preview polling.
 
-use crate::ndi_ffi::DynamicNdiRuntime;
-use crate::scaler::{AdaptiveVideoScaler, NdiTransformConfig, VideoFitMode};
+use crate::ndi_ffi::{DynamicNdiRuntime, NdiReceiver};
+use crate::scaler::{AdaptiveVideoScaler, CpuVideoScaler, NdiTransformConfig, VideoFitMode};
 use crate::test_pattern::{
     generate_test_pattern_frame, parse_synthetic_source, synthetic_test_sources, TestPatternKind,
     SYNTHETIC_SMPTE_1080P,
@@ -580,6 +580,10 @@ impl NdiNodePipeline {
 pub struct VideoPipelineManager {
     runtime: DynamicNdiRuntime,
     nodes: Mutex<HashMap<Uuid, NdiNodePipeline>>,
+    /// One live NDI receiver for the simple output window. Dropped when the user picks something else.
+    simple_recv: Mutex<Option<(String, NdiReceiver)>>,
+    simple_scaler: Mutex<CpuVideoScaler>,
+    simple_last: Mutex<Option<(String, NdiPreviewPayload)>>,
 }
 
 impl Default for VideoPipelineManager {
@@ -593,6 +597,9 @@ impl VideoPipelineManager {
         Self {
             runtime: DynamicNdiRuntime::probe(),
             nodes: Mutex::new(HashMap::new()),
+            simple_recv: Mutex::new(None),
+            simple_scaler: Mutex::new(CpuVideoScaler::new()),
+            simple_last: Mutex::new(None),
         }
     }
 
@@ -676,5 +683,87 @@ impl VideoPipelineManager {
             .entry(device_id)
             .or_insert_with(|| NdiNodePipeline::new(device_id));
         node.render_preview_jpeg(max_width, max_height, now)
+    }
+
+    /// Captures one frame from a real NDI source for the simple output window.
+    /// Returns the previous frame when the receiver has nothing new yet.
+    /// Missing runtime is an error so the caller can fall back to a calm waiting state.
+    pub fn render_external_ndi_jpeg(
+        &self,
+        source_name: &str,
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<Option<NdiPreviewPayload>, VideoError> {
+        if !self.runtime.is_available() {
+            return Err(VideoError::NdiRuntimeMissing);
+        }
+        let captured = {
+            let mut slot = self.simple_recv.lock();
+            let need_new = slot
+                .as_ref()
+                .map(|(name, _)| name != source_name)
+                .unwrap_or(true);
+            if need_new {
+                let rx = self
+                    .runtime
+                    .create_receiver(source_name, "Kontrolfreak Simple Output")?;
+                *slot = Some((source_name.to_string(), rx));
+                *self.simple_last.lock() = None;
+            }
+            let Some((_, rx)) = slot.as_mut() else {
+                return Ok(None);
+            };
+            rx.capture_video(Uuid::nil(), 0)?
+        };
+        let Some(frame) = captured else {
+            let cached = self.simple_last.lock();
+            return Ok(cached.as_ref().and_then(|(name, payload)| {
+                (name == source_name).then(|| payload.clone())
+            }));
+        };
+        let encoded = self.simple_scaler.lock().encode_preview_jpeg_frame(
+            &frame,
+            max_width.max(16),
+            max_height.max(16),
+        )?;
+        let jpeg_base64 = base64::engine::general_purpose::STANDARD.encode(&encoded.jpeg_bytes);
+        let payload = NdiPreviewPayload {
+            device_id: Uuid::nil(),
+            thumb_width: encoded.width,
+            thumb_height: encoded.height,
+            output_width: encoded.width,
+            output_height: encoded.height,
+            out_fps: 0.0,
+            jpeg_base64,
+            timestamp_ms: encoded.timestamp_ms,
+            scaler_backend: "cpu".into(),
+            using_synthetic_source: false,
+            pending_resize: false,
+        };
+        *self.simple_last.lock() = Some((source_name.to_string(), payload.clone()));
+        Ok(Some(payload))
+    }
+
+    /// Releases the simple-output NDI receiver so other apps can use the source.
+    pub fn release_external_ndi(&self) {
+        *self.simple_recv.lock() = None;
+        *self.simple_last.lock() = None;
+    }
+}
+
+#[cfg(test)]
+mod simple_ndi_tests {
+    use super::*;
+
+    #[test]
+    fn external_ndi_preview_reports_missing_runtime() {
+        let mgr = VideoPipelineManager::new();
+        if mgr.runtime_status().available {
+            return;
+        }
+        let err = mgr
+            .render_external_ndi_jpeg("Camera", 320, 180)
+            .unwrap_err();
+        assert!(matches!(err, VideoError::NdiRuntimeMissing));
     }
 }

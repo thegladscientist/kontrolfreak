@@ -5,6 +5,7 @@ use kf_core::{
 use kf_hardware::HardwareManager;
 use kf_protocols::ProtocolManager;
 use kf_video::VideoPipelineManager;
+use crate::simple_output::SimpleOutputHub;
 use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ pub struct AppState {
     pub telemetry: Arc<TelemetryAggregator>,
     pub protocols: Arc<ProtocolManager>,
     pub video: Arc<VideoPipelineManager>,
+    pub simple: Arc<SimpleOutputHub>,
     pub hardware: Arc<HardwareManager>,
     pub m4: Arc<crate::commands_m4::M4RuntimeState>,
     pub telemetry_pump: Mutex<Option<JoinHandle<()>>>,
@@ -44,6 +46,7 @@ impl AppState {
         protocols.add_output_listener(Arc::new(move |out| {
             video_listener.apply_routed_output(out);
         }));
+        let simple = SimpleOutputHub::new(Arc::clone(&protocols), Arc::clone(&video));
         let hardware = Arc::new(HardwareManager::new(
             Arc::clone(&control),
             Arc::clone(&router),
@@ -60,6 +63,7 @@ impl AppState {
             telemetry,
             protocols,
             video,
+            simple,
             hardware,
             m4,
             telemetry_pump: Mutex::new(None),

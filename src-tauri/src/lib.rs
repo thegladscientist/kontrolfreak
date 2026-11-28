@@ -2,9 +2,12 @@ pub mod commands;
 pub mod commands_m2;
 pub mod commands_m3;
 pub mod commands_m4;
+pub mod commands_simple;
+pub mod simple_output;
 pub mod state;
 
 use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +17,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(AppState::new())
+        .setup(|app| {
+            app.state::<AppState>().simple.start();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_workspace,
             commands::add_device,
@@ -112,6 +119,16 @@ pub fn run() {
             commands_m4::m4_import_kfreak_bundle,
             commands_m4::m4_import_kfreak_file,
             commands_m4::m4_get_diagnostics_snapshot,
+            commands_simple::simple_poll_sources,
+            commands_simple::simple_set_osc_port,
+            commands_simple::simple_select_source,
+            commands_simple::simple_get_settings,
+            commands_simple::simple_set_settings,
+            commands_simple::simple_preview,
+            commands_simple::simple_host_info,
+            commands_simple::simple_list_displays,
+            commands_simple::simple_open_output,
+            commands_simple::simple_set_output_fullscreen,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kontrolfreak Tauri application");

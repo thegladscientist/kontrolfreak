@@ -4,7 +4,8 @@ Modular, low-latency desktop studio for routing control signals, hardware periph
 
 ## Highlights
 
-- **Core Signal Router (M1):** Lock-free `kf-core` routing engine, OSC, MIDI (including virtual ports), WebSockets, raw UDP, modifier chains (range, curve, deadzone, hysteresis, smoothing, expressions), collapsible racks with macros, Offline Ghost device auto-rebind, and 3-pane hybrid UI with Calm Mode.
+- **Simple VJ output (default screen):** Live lists of OSC senders, MIDI inputs (including virtual ports), and NDI sources plus built-in test patterns. Pick one source — that is the whole setup — then open a fullscreen output window on another display. On Wayland, drag the undecorated window to the display and press `F` or double-click. The node graph, racks, HID learn, and depth tools stay one click away under **Advanced**.
+- **Core Signal Router (M1):** Lock-free `kf-core` routing engine, OSC, MIDI (including virtual ports), WebSockets, raw UDP, modifier chains (range, curve, deadzone, hysteresis, smoothing, expressions), collapsible racks with macros, Offline Ghost device auto-rebind, and the 3-pane hybrid UI (Advanced) with Calm Mode.
 - **Pure-Rust RTPMIDI & Dynamic NDI Video (M2):** Full RFC 6295 / AppleMIDI (dual UDP `N`/`N+1`, 3-way clock sync, recovery journal, mDNS-SD discovery) and dynamic NDI v6 runtime loading with arbitrary resolution scaling, crop/pan/zoom/letterbox, ~150 ms debounced resize, built-in Test Patterns, and live signal modulation.
 - **Generic HID Auto-Learn & RGB Camera CV (M3):** Hot-plug USB/Bluetooth HID discovery, 4-step noise-masked HID Learn Wizard (auto-classifies buttons, faders, joysticks, rotary encoders), reusable device presets, and lightweight CPU RGB camera CV extractors (luma, motion energy, color, blob centroid, zones).
 - **Crash-Isolated Depth Sidecars & `.kfreak` Bundles (M4):** Separate-process depth sensor sidecars (`kf-sensor-depth`) with zero-copy shared-memory ring buffers, automatic watchdog restart, 3D ROI extractors + NDI depth matte, portable `.kfreak` zip project bundles, and live latency/sidecar Diagnostics & Profiler drawer.
@@ -30,13 +31,16 @@ npm install
 ```bash
 npm run tauri dev
 ```
+The app opens on the simple output screen. Choose a source, set resolution / fit / crop / display, then **Open output**. **Advanced** returns to the node graph.
 
 ### 3. Or preview in a standalone browser (loopback mock mode)
 No Rust build or hardware required — includes synthetic NDI Test Patterns, mock RTPMIDI peers, simulated HID Learn devices, synthetic RGB camera CV, and synthetic Depth sensors:
 ```bash
 npm run dev
 ```
-Then open `http://localhost:1420` in your browser.
+Then open `http://localhost:1420` in your browser. The same simple screen runs against a loopback OSC sender, a virtual MIDI port, and the built-in test patterns. **Open output** pops a preview window (`F` or double-click for fullscreen).
+
+Vite in this repo is set to port **5173**, which is also the Tauri dev URL. If 1420 does not answer, open `http://localhost:5173`.
 
 ---
 

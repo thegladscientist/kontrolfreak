@@ -14,7 +14,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { telemetryStore } from '../lib/telemetryStore';
 import { bridge } from '../lib/bridge';
 
-export const TopBar: React.FC = () => {
+export const TopBar: React.FC<{ onSimple?: () => void }> = ({ onSimple }) => {
   const graph = useWorkspaceStore((s) => s.graph);
   const setProjectName = useWorkspaceStore((s) => s.setProjectName);
   const toggleCalmMode = useWorkspaceStore((s) => s.toggleCalmMode);
@@ -168,6 +168,15 @@ export const TopBar: React.FC = () => {
 
       {/* Right: Calm Mode, Cmd+K, Engine Rate */}
       <div className="flex items-center gap-2">
+        {onSimple && (
+          <button
+            type="button"
+            onClick={onSimple}
+            className="px-2.5 py-1 rounded-md text-xs font-medium border border-studio-border text-slate-300 hover:bg-studio-elevated"
+          >
+            Simple
+          </button>
+        )}
         <button
           onClick={() => void toggleCalmMode()}
           aria-pressed={calmMode}

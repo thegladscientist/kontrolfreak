@@ -1,5 +1,6 @@
 pub mod midi;
 pub mod osc;
+pub mod osc_scout;
 pub mod rtpmidi;
 pub mod udp;
 pub mod websocket;

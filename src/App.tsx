@@ -1,4 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { isOutputLocation } from './simple/model';
+import { OutputStage } from './simple/OutputStage';
+import { SimpleVj } from './simple/SimpleVj';
 import { TopBar } from './components/TopBar';
 import { LeftSidebar, registerBuiltinSidebarSections } from './components/LeftSidebar';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
@@ -29,7 +32,53 @@ export function bootBuiltinRegistries(): void {
 
 bootBuiltinRegistries();
 
+const UI_MODE_KEY = 'kf-ui-mode';
+
+function outputDocument(): boolean {
+  if (typeof window === 'undefined') return false;
+  const flag = (window as Window & { __KF_VIEW__?: string }).__KF_VIEW__;
+  return isOutputLocation(window.location.href, flag);
+}
+
 export const App: React.FC = () => {
+  const [advanced, setAdvanced] = useState(() => {
+    try {
+      return sessionStorage.getItem(UI_MODE_KEY) === 'advanced';
+    } catch {
+      return false;
+    }
+  });
+
+  if (outputDocument()) return <OutputStage />;
+  if (!advanced) {
+    return (
+      <SimpleVj
+        onAdvanced={() => {
+          try {
+            sessionStorage.setItem(UI_MODE_KEY, 'advanced');
+          } catch {
+            /* ignore */
+          }
+          setAdvanced(true);
+        }}
+      />
+    );
+  }
+  return (
+    <AdvancedStudio
+      onSimple={() => {
+        try {
+          sessionStorage.setItem(UI_MODE_KEY, 'simple');
+        } catch {
+          /* ignore */
+        }
+        setAdvanced(false);
+      }}
+    />
+  );
+};
+
+const AdvancedStudio: React.FC<{ onSimple: () => void }> = ({ onSimple }) => {
   const bootstrap = useWorkspaceStore((s) => s.bootstrap);
 
   useEffect(() => {
@@ -52,7 +101,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-studio-bg text-studio-text overflow-hidden">
-      <TopBar />
+      <TopBar onSimple={onSimple} />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <LeftSidebar />
