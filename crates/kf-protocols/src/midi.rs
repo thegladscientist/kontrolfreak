@@ -233,6 +233,12 @@ pub fn is_loopmidi_port_name(name: &str) -> bool {
 
 /// Lists hardware MIDI ports via `midir`, returning an empty list cleanly if the OS audio/MIDI
 /// subsystem is unavailable (e.g. headless Linux CI containers).
+/// Inputs, bidirectional ports, and virtual ports are selectable VJ sources.
+/// Plain hardware outputs are left out — they are not things you listen to.
+pub fn is_selectable_midi_source(port: &MidiPortInfo) -> bool {
+    port.is_virtual || port.direction != "out"
+}
+
 pub fn list_hardware_midi_ports() -> Vec<MidiPortInfo> {
     let mut ports = Vec::new();
     if let Ok(midi_in) = midir::MidiInput::new("kontrolfreak-enum-in") {
@@ -572,5 +578,41 @@ mod tests {
             backend: MidiBackendKind::LoopMidiWindows,
         }]);
         assert!(with_loop.loopmidi_detected);
+    }
+
+    #[test]
+    fn selectable_sources_include_inputs_and_virtual_ports_only() {
+        let hardware_in = MidiPortInfo {
+            name: "Launch Control".into(),
+            direction: "in".into(),
+            is_virtual: false,
+            is_loopmidi: false,
+            backend: MidiBackendKind::Hardware,
+        };
+        let hardware_out = MidiPortInfo {
+            name: "Synth Out".into(),
+            direction: "out".into(),
+            is_virtual: false,
+            is_loopmidi: false,
+            backend: MidiBackendKind::Hardware,
+        };
+        let virtual_out = MidiPortInfo {
+            name: "loopMIDI Port".into(),
+            direction: "out".into(),
+            is_virtual: true,
+            is_loopmidi: true,
+            backend: MidiBackendKind::LoopMidiWindows,
+        };
+        let loopback = MidiPortInfo {
+            name: "Kontrolfreak Loopback 1".into(),
+            direction: "bidir".into(),
+            is_virtual: true,
+            is_loopmidi: false,
+            backend: MidiBackendKind::LoopbackMock,
+        };
+        assert!(is_selectable_midi_source(&hardware_in));
+        assert!(!is_selectable_midi_source(&hardware_out));
+        assert!(is_selectable_midi_source(&virtual_out));
+        assert!(is_selectable_midi_source(&loopback));
     }
 }

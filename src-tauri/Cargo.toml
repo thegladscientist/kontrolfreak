@@ -19,6 +19,7 @@ kf-hardware = { workspace = true }
 kf-sidecar-ipc = { workspace = true }
 kf-sensor-depth = { workspace = true }
 base64 = "0.22"
+midir = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

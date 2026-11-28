@@ -2285,6 +2285,7 @@ dependencies = [
  "kf-sensor-depth",
  "kf-sidecar-ipc",
  "kf-video",
+ "midir",
  "parking_lot",
  "serde",
  "serde_json",
